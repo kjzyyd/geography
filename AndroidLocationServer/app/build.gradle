@@ -1,0 +1,30 @@
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 33
+    namespace 'com.example.locationserver'
+
+    defaultConfig {
+        applicationId "com.example.locationserver"
+        minSdkVersion 21
+        targetSdkVersion 33
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.core:core:1.9.0'
+    implementation 'com.google.android.material:material:1.8.0'
+    // 内嵌 HTTP 服务器
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
+    // 内置地图(开源 OpenStreetMap,无需 API Key)
+    implementation 'org.osmdroid:osmdroid-android:6.1.14'
+}

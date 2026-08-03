@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">位置监控服务端</string>
+    <string name="server_status">服务端状态</string>
+    <string name="start_server">启动服务</string>
+    <string name="stop_server">停止服务</string>
+    <string name="server_address">服务地址</string>
+    <string name="client_location">客户端位置</string>
+    <string name="distance">距离</string>
+    <string name="alert_threshold">报警距离(米)</string>
+    <string name="threshold_hint">当客户端距离服务端小于此值时报警</string>
+    <string name="alert_enabled">启用距离报警</string>
+    <string name="use_my_location_as_center">以本机位置为报警中心</string>
+    <string name="set_center_on_map">点击地图设为报警中心</string>
+    <string name="no_data">暂未收到客户端位置</string>
+    <string name="server_running">服务运行中</string>
+    <string name="server_stopped">服务已停止</string>
+    <string name="http_channel">HTTP 服务</string>
+    <string name="alert_channel">距离报警</string>
+</resources>
