@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/menu_toggle_server"
+        android:title="@string/start_server"
+        android:showAsAction="ifRoom|withText" />
+    <item
+        android:id="@+id/menu_clear"
+        android:title="清除位置"
+        android:showAsAction="never" />
+    <item
+        android:id="@+id/menu_center_me"
+        android:title="@string/use_my_location_as_center"
+        android:showAsAction="never" />
+</menu>

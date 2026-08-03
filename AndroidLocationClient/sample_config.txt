@@ -1,0 +1,10 @@
+# 客户端配置文件示例
+# 把此文件放到客户端手机的 /sdcard/Download/location_client_config.txt
+# 或通过 adb push 到 /data/data/com.example.locationclient/files/client_config.txt
+# 然后客户端会自动读取下面的配置(无需重新编译)。
+
+# 服务端上报地址(改成服务端手机的局域网 IP 和端口)
+server_url=http://192.168.1.100:8080/location
+
+# 本设备 ID(用于服务端区分不同客户端)
+device_id=client_001
