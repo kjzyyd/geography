@@ -25,9 +25,11 @@ public class Config {
 
     /** 默认服务端上报地址:公网 kjzyyd.fucku.top (80端口由FRP映射到本地9178) */
     public static final String DEFAULT_SERVER_URL = "http://kjzyyd.fucku.top/location";
+    /** 备用地址:如果80端口不通,尝试9178端口 */
+    public static final String FALLBACK_SERVER_URL = "http://kjzyyd.fucku.top:9178/location";
 
-    /** 上报间隔(毫秒),2 分钟 */
-    public static final long REPORT_INTERVAL_MS = 2 * 60 * 1000L;
+    /** 上报间隔(毫秒),30 秒 */
+    public static final long REPORT_INTERVAL_MS = 30 * 1000L;
 
     /** 单次定位超时(毫秒) */
     public static final long LOCATION_TIMEOUT_MS = 30 * 1000L;

@@ -38,10 +38,13 @@ public class LocationReporter {
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
     private static final int CONNECT_TIMEOUT = 10_000;
     private static final int READ_TIMEOUT = 10_000;
+    // 记录上次成功的 URL,下次优先使用
+    private static String lastSuccessUrl = null;
 
     public static void report(Context ctx, Location location) {
         if (location == null) return;
-        final String serverUrl = Config.getServerUrl(ctx);
+        final String primaryUrl = Config.getServerUrl(ctx);
+        final String fallbackUrl = Config.FALLBACK_SERVER_URL;
         final String deviceId = Config.getDeviceId(ctx);
         final double lat = location.getLatitude();
         final double lng = location.getLongitude();
@@ -51,45 +54,66 @@ public class LocationReporter {
         final String timeStr = formatTime(ts);
 
         executor.execute(() -> {
-            HttpURLConnection conn = null;
-            try {
-                JSONObject json = new JSONObject();
-                json.put("device_id", deviceId);
-                json.put("latitude", lat);
-                json.put("longitude", lng);
-                json.put("accuracy", acc);
-                json.put("speed", speed);
-                json.put("timestamp", ts);
-                json.put("time", timeStr);
+            // 优先用上次成功的 URL,否则用主地址
+            String url1 = lastSuccessUrl != null ? lastSuccessUrl : primaryUrl;
+            String url2 = url1.equals(primaryUrl) ? fallbackUrl : primaryUrl;
 
-                byte[] data = json.toString().getBytes(StandardCharsets.UTF_8);
-
-                URL url = new URL(serverUrl);
-                conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-                conn.setRequestProperty("Accept", "application/json");
-                conn.setConnectTimeout(CONNECT_TIMEOUT);
-                conn.setReadTimeout(READ_TIMEOUT);
-                conn.setDoOutput(true);
-                conn.setDoInput(true);
-
-                try (OutputStream os = conn.getOutputStream()) {
-                    os.write(data);
-                    os.flush();
-                }
-                int code = conn.getResponseCode();
-                if (code < 200 || code >= 300) {
-                    Log.w(TAG, "Server responded HTTP " + code);
-                }
-            } catch (Exception e) {
-                Log.w(TAG, "Report failed: " + e.getMessage());
-            } finally {
-                if (conn != null) {
-                    conn.disconnect();
-                }
+            if (tryReport(url1, deviceId, lat, lng, acc, speed, ts, timeStr)) {
+                return;
             }
+            // 主地址失败,尝试备用地址
+            Log.w(TAG, "主地址失败,尝试备用: " + url2);
+            tryReport(url2, deviceId, lat, lng, acc, speed, ts, timeStr);
         });
+    }
+
+    private static boolean tryReport(String serverUrl, String deviceId,
+                                     double lat, double lng, float acc, float speed,
+                                     long ts, String timeStr) {
+        HttpURLConnection conn = null;
+        try {
+            JSONObject json = new JSONObject();
+            json.put("device_id", deviceId);
+            json.put("latitude", lat);
+            json.put("longitude", lng);
+            json.put("accuracy", acc);
+            json.put("speed", speed);
+            json.put("timestamp", ts);
+            json.put("time", timeStr);
+
+            byte[] data = json.toString().getBytes(StandardCharsets.UTF_8);
+
+            URL url = new URL(serverUrl);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setConnectTimeout(CONNECT_TIMEOUT);
+            conn.setReadTimeout(READ_TIMEOUT);
+            conn.setDoOutput(true);
+            conn.setDoInput(true);
+
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(data);
+                os.flush();
+            }
+            int code = conn.getResponseCode();
+            if (code >= 200 && code < 300) {
+                lastSuccessUrl = serverUrl;
+                Log.i(TAG, "上报成功: " + serverUrl);
+                return true;
+            } else {
+                Log.w(TAG, "Server responded HTTP " + code + " from " + serverUrl);
+                return false;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Report failed (" + serverUrl + "): " + e.getMessage());
+            return false;
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
+        }
     }
 
     private static String formatTime(long ms) {
