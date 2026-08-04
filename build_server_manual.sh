@@ -27,16 +27,10 @@ cat > $BUILD/AndroidManifest_pkg.xml << 'XMLEOF'
 XMLEOF
 tail -n +3 $PROJECT/app/src/main/AndroidManifest.xml >> $BUILD/AndroidManifest_pkg.xml
 
-# 合并 AAR 资源:排除 material/constraintlayout(需要 cardview/recyclerview 等额外依赖)
-# 只取 appcompat 系 + osmdroid + core 系的资源
+# 合并 AAR 资源:不需要 appcompat(改用系统 Activity + 系统主题)
+# 只取 osmdroid 的资源
 AAR_RES=""
-for name in core-1.9.0 versionedparcelable-1.1.1 customview-1.1.0 drawerlayout-1.1.1 \
-            viewpager-1.0.0 savedstate-1.2.0 activity-1.6.0 fragment-1.3.6 \
-            appcompat-1.6.1 appcompat-resources-1.6.1 lifecycle-runtime-2.5.1 \
-            lifecycle-viewmodel-2.5.1 lifecycle-livedata-core-2.5.1 \
-            lifecycle-viewmodel-savedstate-2.5.1 core-runtime-2.1.0 \
-            vectordrawable-1.1.0 vectordrawable-animated-1.1.0 transition-1.4.1 \
-            legacy-support-core-utils-1.0.0 osmdroid-android-6.1.14; do
+for name in osmdroid-android-6.1.14; do
     d="$DEPS/aar_extracted/$name/res"
     if [ -d "$d" ]; then
         flatdir=$(dirname "$d")/res_flat

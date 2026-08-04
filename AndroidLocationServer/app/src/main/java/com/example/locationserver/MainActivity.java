@@ -2,6 +2,7 @@ package com.example.locationserver;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -23,8 +24,6 @@ import android.os.Vibrator;
 import android.text.format.DateFormat;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 
@@ -45,7 +44,7 @@ import org.osmdroid.views.overlay.Polygon;
 
 import java.util.Date;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends Activity {
 
     private static final int REQ_NOTIFY = 3001;
     private static final int REQ_LOCATION = 3002;
@@ -100,7 +99,7 @@ public class MainActivity extends AppCompatActivity {
 
         // 启动时请求定位权限,以便自动设置报警中心到本机位置
         if (!hasLocationPermission()) {
-            ActivityCompat.requestPermissions(this,
+            requestPermissions(
                     new String[]{
                             Manifest.permission.ACCESS_FINE_LOCATION,
                             Manifest.permission.ACCESS_COARSE_LOCATION
@@ -338,7 +337,7 @@ public class MainActivity extends AppCompatActivity {
     @SuppressLint("MissingPermission")
     private void setCenterToMyLocation() {
         if (!hasLocationPermission()) {
-            ActivityCompat.requestPermissions(this,
+            requestPermissions(
                     new String[]{
                             Manifest.permission.ACCESS_FINE_LOCATION,
                             Manifest.permission.ACCESS_COARSE_LOCATION
@@ -558,10 +557,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this,
+            if (checkSelfPermission(
                     Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this,
+                requestPermissions(
                         new String[]{Manifest.permission.POST_NOTIFICATIONS},
                         REQ_NOTIFY);
             }
@@ -569,9 +568,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean hasLocationPermission() {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED
-                || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
     }
 
