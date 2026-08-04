@@ -12,4 +12,8 @@
         android:id="@+id/menu_center_me"
         android:title="@string/use_my_location_as_center"
         android:showAsAction="never" />
+    <item
+        android:id="@+id/menu_edit_note"
+        android:title="@string/edit_note"
+        android:showAsAction="never" />
 </menu>

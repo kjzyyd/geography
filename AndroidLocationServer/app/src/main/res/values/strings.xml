@@ -16,4 +16,6 @@
     <string name="server_stopped">服务已停止</string>
     <string name="http_channel">HTTP 服务</string>
     <string name="alert_channel">距离报警</string>
+    <string name="edit_note">编辑备注</string>
+    <string name="edit_note_hint">请输入备注名</string>
 </resources>

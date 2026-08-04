@@ -2,6 +2,7 @@ package com.example.locationserver;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -96,6 +97,18 @@ public class MainActivity extends AppCompatActivity {
 
         // 自动启动 HTTP 服务端(实用:打开即可用)
         startServer();
+
+        // 启动时请求定位权限,以便自动设置报警中心到本机位置
+        if (!hasLocationPermission()) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                    }, REQ_LOCATION);
+        }
+
+        // 延迟 2 秒后自动将报警中心设置为本机位置(等待权限授予及定位服务就绪)
+        mainHandler.postDelayed(this::setCenterToMyLocation, 2000);
     }
 
     private void startServer() {
@@ -254,19 +267,29 @@ public class MainActivity extends AppCompatActivity {
     // ----------------- 位置接收与显示 -----------------
 
     private void onClientLocation(LocationData data) {
-        // 客户端位置文本
-        tvClientInfo.setText("客户端: " + data.toString());
+        // 获取该设备的备注
+        String note = LocationStore.getInstance().getNote(data.deviceId);
+
+        // 客户端位置文本(显示备注、坐标、时间)
+        StringBuilder info = new StringBuilder();
+        if (!note.isEmpty()) {
+            info.append("备注: ").append(note).append("\n");
+        }
+        info.append(String.format(java.util.Locale.US, "%s: %.6f, %.6f (±%.0fm)",
+                data.deviceId, data.latitude, data.longitude, data.accuracy));
+        info.append("\n时间: ").append(data.time);
+        tvClientInfo.setText(info.toString());
 
         GeoPoint clientPoint = new GeoPoint(data.latitude, data.longitude);
 
-        // 更新客户端标记
+        // 更新客户端标记(标题包含备注)
         if (clientMarker == null) {
             clientMarker = new Marker(mapView);
-            clientMarker.setTitle("客户端 " + data.deviceId);
             clientMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
             mapView.getOverlays().add(clientMarker);
         }
         clientMarker.setPosition(clientPoint);
+        clientMarker.setTitle((note.isEmpty() ? "" : note + " | ") + data.deviceId);
         clientMarker.setSnippet(data.time);
 
         // 移动地图视野到客户端
@@ -276,6 +299,37 @@ public class MainActivity extends AppCompatActivity {
 
         // 计算距离并检查报警
         checkDistanceAndAlert(clientPoint);
+    }
+
+    // ----------------- 备注编辑 -----------------
+
+    /** 弹出对话框编辑指定设备的备注 */
+    private void showNoteDialog(final String deviceId) {
+        if (deviceId == null) {
+            Toast.makeText(this, "暂无客户端,无法编辑备注", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final EditText et = new EditText(this);
+        et.setHint(R.string.edit_note_hint);
+        String existing = LocationStore.getInstance().getNote(deviceId);
+        if (!existing.isEmpty()) {
+            et.setText(existing);
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.edit_note)
+                .setView(et)
+                .setPositiveButton("确定", (d, w) -> {
+                    String text = et.getText().toString().trim();
+                    LocationStore.getInstance().setNote(deviceId, text);
+                    // 刷新当前设备的 UI 显示
+                    LocationData cur = LocationStore.getInstance().getDevice(deviceId);
+                    if (cur != null) {
+                        onClientLocation(cur);
+                    }
+                    Toast.makeText(this, "备注已保存", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     // ----------------- 报警中心 -----------------
@@ -560,6 +614,15 @@ public class MainActivity extends AppCompatActivity {
             return true;
         } else if (id == R.id.menu_toggle_server) {
             toggleServer();
+            return true;
+        } else if (id == R.id.menu_edit_note) {
+            // 编辑当前客户端的备注
+            LocationData d = LocationStore.getInstance().getLatest();
+            if (d == null) {
+                Toast.makeText(this, "暂无客户端,无法编辑备注", Toast.LENGTH_SHORT).show();
+            } else {
+                showNoteDialog(d.deviceId);
+            }
             return true;
         }
         return super.onOptionsItemSelected(item);

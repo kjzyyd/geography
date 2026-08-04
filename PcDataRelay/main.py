@@ -17,9 +17,10 @@ import sys
 import threading
 import time
 import tkinter as tk
+import urllib.request
 import webbrowser
 from datetime import datetime
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, simpledialog
 
 from http_server import HttpServerThread, DEFAULT_PORT
 from frpc_manager import FrpcManager, find_frpc, FRPC_SERVER_PORT, FRPC_TOKEN
@@ -28,6 +29,9 @@ from geo_utils import haversine_meters, format_distance
 
 
 PUBLIC_BASE = "http://kjzyyd.fucku.top"
+
+# 备注持久化文件路径 (与 main.py 同目录)
+NOTES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "notes.json")
 
 
 class App:
@@ -49,6 +53,11 @@ class App:
         self.alert_center = None
         self.alert_threshold_meters = 500.0
         self.store = LocationStore()
+        # 载入持久化的设备备注
+        try:
+            self.store.load_notes(NOTES_FILE)
+        except Exception:
+            pass
 
         # 自定义 frpc 路径
         self._custom_frpc_path = ""
@@ -114,6 +123,8 @@ class App:
         clist.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
         self.client_list = tk.Text(clist, height=10, wrap=tk.WORD, font=("Consolas", 9))
         self.client_list.pack(fill=tk.BOTH, expand=True)
+        # 双击客户端列表中的设备 -> 编辑该设备的备注
+        self.client_list.bind("<Double-Button-1>", self._on_client_list_double_click)
 
         # 右侧: 控制 + 日志
         right = ttk.Frame(body)
@@ -132,6 +143,8 @@ class App:
         self.btn_open_map.pack(fill=tk.X, pady=2)
         self.btn_clear = ttk.Button(ctrl, text="清空位置 / 日志", command=self._clear_all)
         self.btn_clear.pack(fill=tk.X, pady=2)
+        self.btn_edit_note = ttk.Button(ctrl, text="编辑备注", command=self._edit_note_prompt)
+        self.btn_edit_note.pack(fill=tk.X, pady=2)
 
         logf = ttk.LabelFrame(right, text="运行日志", padding=6)
         logf.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
@@ -146,6 +159,8 @@ class App:
     # ----------------- 自动启动 -----------------
     def _auto_start(self):
         self._toggle_http()  # 启动 HTTP
+        # 启动后台线程，根据公网 IP 自动设置报警中心
+        threading.Thread(target=self._fetch_my_ip_geolocation, name="auto-ip", daemon=True).start()
 
     # ----------------- HTTP -----------------
     def _toggle_http(self):
@@ -281,9 +296,49 @@ class App:
             messagebox.showerror("参数错误", "阈值必须是不小于 5 的数字")
 
     def _use_my_ip(self):
-        # 简化: 让用户自行输入，或者调用外部 IP 定位 API
-        messagebox.showinfo("提示", "请手动在输入框填入报警中心坐标，格式：纬度,经度\n"
-                                    "例如：30.2741,120.1551")
+        # 后台线程拉取本机公网 IP 的地理位置，避免阻塞 UI
+        self._log_any("[GUI] 正在获取本机公网 IP 地理位置...")
+        threading.Thread(target=self._fetch_my_ip_geolocation, name="my-ip", daemon=True).start()
+
+    def _fetch_my_ip_geolocation(self):
+        """后台获取本机公网 IP 的经纬度，并更新报警中心。
+        成功后通过 root.after 回到主线程更新 UI。
+        """
+        url = "http://ip-api.com/json/?lang=zh-CN"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "PcDataRelay/1.0"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8") or "{}")
+        except Exception as e:
+            self._log_any("[GUI] 获取本机 IP 地理位置失败: %s" % e)
+            return
+        if not isinstance(data, dict):
+            self._log_any("[GUI] IP 定位返回格式异常")
+            return
+        if data.get("status") != "success":
+            self._log_any("[GUI] IP 定位失败: %s" % data.get("message", "未知原因"))
+            return
+        try:
+            lat = float(data.get("lat"))
+            lon = float(data.get("lon"))
+        except (TypeError, ValueError):
+            self._log_any("[GUI] IP 定位返回的经纬度无效")
+            return
+        country = data.get("country", "")
+        region = data.get("regionName", "")
+        city = data.get("city", "")
+        query = data.get("query", "")
+        desc = " ".join(p for p in (country, region, city) if p)
+        # 回到主线程更新 UI
+        def _apply():
+            self.var_center.set("%.6f,%.6f" % (lat, lon))
+            self.alert_center = (lat, lon)
+            self._log_any("[GUI] 已根据本机 IP(%s) 设置报警中心: %.6f,%.6f (%s)" % (query, lat, lon, desc or "未知"))
+        try:
+            self.root.after(0, _apply)
+        except Exception:
+            # 主线程可能已退出
+            pass
 
     def _clear_all(self):
         n = self.store.count()
@@ -295,6 +350,96 @@ class App:
         self.log_txt.config(state=tk.DISABLED)
         self.status.config(text="已清空。原客户端数: %d" % n)
         self._refresh_clients_ui()
+
+    # ----------------- 设备备注 -----------------
+    def _edit_note(self, device_id: str):
+        """弹出对话框编辑指定设备的备注，保存并持久化"""
+        if not device_id:
+            return
+        cur = self.store.get_note(device_id) or ""
+        new_note = simpledialog.askstring(
+            "编辑备注",
+            "为设备 [%s] 设置备注:\n(留空则清除该备注)" % device_id,
+            initialvalue=cur,
+            parent=self.root,
+        )
+        # 用户点击「取消」时 askstring 返回 None，应保持原状
+        if new_note is None:
+            return
+        self.store.set_note(device_id, new_note)
+        try:
+            self.store.save_notes(NOTES_FILE)
+        except Exception as e:
+            self._log_any("[GUI] 备注保存失败: %s" % e)
+        self._log_any("[GUI] 备注已更新: %s -> %s" % (device_id, new_note or "(清除)"))
+        self._refresh_clients_ui()
+
+    def _edit_note_prompt(self):
+        """「编辑备注」按钮: 先询问 device_id，再编辑其备注"""
+        device_id = simpledialog.askstring(
+            "编辑备注",
+            "请输入要编辑备注的 device_id:",
+            parent=self.root,
+        )
+        if device_id is None:
+            return
+        device_id = device_id.strip()
+        if not device_id:
+            return
+        self._edit_note(device_id)
+
+    def _on_client_list_double_click(self, event):
+        """双击客户端列表中的设备块，编辑该设备的备注。
+        每个块第一行格式为「device_id」或「备注: xxx | device_id」，
+        可能还附带 alert_flag(如「 ⚠进范围」)。
+        若用户双击到子行(位置/距离行)，则向上回溯找到块首行。
+        """
+        try:
+            index = self.client_list.index("@%d,%d" % (event.x, event.y))
+        except Exception:
+            return
+        line_no = int(str(index).split(".")[0])
+        if line_no < 1:
+            return
+        # 向上回溯(最多3行)找到块首行(不以两个空格开头的行)
+        header_line = ""
+        for ln in range(line_no, max(0, line_no - 3), -1):
+            txt = self.client_list.get("%d.0" % ln, "%d.0 lineend" % ln)
+            if not txt:
+                continue
+            # 块首行不以两个空格开头
+            if not txt.startswith("  "):
+                header_line = txt
+                break
+        device_id = self._parse_device_id_from_line(header_line)
+        if device_id:
+            self._edit_note(device_id)
+
+    @staticmethod
+    def _parse_device_id_from_line(line: str) -> str:
+        """从客户端列表的第一行解析出 device_id。
+        支持的格式:
+          - 「device_id」
+          - 「备注: xxx | device_id」
+          - 「device_id ⚠进范围」
+          - 「备注: xxx | device_id ⚠进范围」
+        解析策略: 若含「 | 」分隔符，取其后部分；再剥离 alert_flag。
+        """
+        if not line:
+            return ""
+        s = line.strip()
+        # 剥离 alert_flag (如「 ⚠进范围」)
+        for flag in (" ⚠进范围",):
+            if s.endswith(flag):
+                s = s[:-len(flag)].strip()
+        # 处理「备注: xxx | device_id」
+        if " | " in s:
+            s = s.rsplit(" | ", 1)[1].strip()
+        # 再剥离一次 alert_flag (以防顺序不同)
+        for flag in (" ⚠进范围",):
+            if s.endswith(flag):
+                s = s[:-len(flag)].strip()
+        return s
 
     # ----------------- 日志队列 -----------------
     def _log_any(self, msg: str):
@@ -323,6 +468,14 @@ class App:
     # ----------------- UI 定时刷新 -----------------
     def _schedule_refresh_ui(self):
         self._refresh_clients_ui()
+        # 每 30 秒持久化一次设备备注
+        self._notes_save_counter = getattr(self, "_notes_save_counter", 0) + 1
+        if self._notes_save_counter >= 20:  # 20 * 1.5s = 30s
+            self._notes_save_counter = 0
+            try:
+                self.store.save_notes(NOTES_FILE)
+            except Exception as e:
+                self._log_any("[GUI] 备注保存失败: %s" % e)
         self.root.after(1500, self._schedule_refresh_ui)
 
     def _parse_center(self):
@@ -365,8 +518,12 @@ class App:
             else:
                 self.alert_states[it.device_id] = False
 
-            line = ("%s%s\n  位置: %.6f, %.6f  精度±%.0fm\n  距离: %s   上报时间: %s (%s)\n" %
-                    (it.device_id, alert_flag, it.latitude, it.longitude, it.accuracy,
+            # 备注前缀: 有备注则显示「备注: xxx | 」
+            note = self.store.get_note(it.device_id)
+            note_prefix = ("备注: %s | " % note) if note else ""
+
+            line = ("%s%s%s\n  位置: %.6f, %.6f  精度±%.0fm\n  距离: %s   上报时间: %s (%s)\n" %
+                    (note_prefix, it.device_id, alert_flag, it.latitude, it.longitude, it.accuracy,
                      dist_str, it.time_str or "-", age_str))
             lines.append(line)
 

@@ -53,23 +53,38 @@ L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scal
   subdomains:['1','2','3','4'],maxZoom:19,attribution:'© 高德地图'
 }).addTo(map);
 var markers = {};
+var notes = {};
 function fmtTime(ts){if(!ts)return '';var d=new Date(ts*1000);return d.toLocaleString('zh-CN');}
 function refresh(){
-  fetch('/location').then(r=>r.json()).then(data=>{
+  Promise.all([
+    fetch('/location').then(r=>r.json()).catch(()=>({})),
+    fetch('/notes').then(r=>r.json()).catch(()=>({}))
+  ]).then(function(resps){
+    var data = resps[0] || {};
+    notes = resps[1] || {};
     var items = Object.values(data || {});
     document.getElementById('info').textContent = '设备数: '+items.length+' · 最后刷新: '+new Date().toLocaleTimeString();
     items.forEach(it=>{
       if(!(it.latitude&&it.longitude)) return;
       var ll=[it.latitude, it.longitude];
-      var title=it.device_id;
+      var note = notes[it.device_id] || '';
+      // 标题: 有备注则显示「备注名 (device_id)」
+      var title = note ? (note + ' (' + it.device_id + ')') : it.device_id;
       var html='<b>'+title+'</b><br>'+it.latitude.toFixed(6)+', '+it.longitude.toFixed(6);
+      if(note) html+='<br>备注: '+note;
       if(it.time_str) html+='<br>'+it.time_str;
       if(it.accuracy) html+='<br>精度±'+Math.round(it.accuracy)+'m';
-      if(markers[title]){
-        markers[title].setLatLng(ll);
-        markers[title].bindPopup(html);
+      // 使用 device_id 作为内部 key，避免同名备注互相覆盖
+      var key = it.device_id;
+      if(markers[key]){
+        markers[key].setLatLng(ll);
+        markers[key].bindPopup(html);
+        // leaflet 没有直接 setTitle, 用 bindTooltip 显示悬浮提示
+        markers[key].unbindTooltip();
+        markers[key].bindTooltip(title);
       }else{
-        markers[title]=L.marker(ll).addTo(map).bindPopup(html);
+        markers[key]=L.marker(ll).addTo(map).bindPopup(html);
+        markers[key].bindTooltip(title);
         map.panTo(ll);
       }
     });
@@ -128,6 +143,9 @@ def _make_handler(store: LocationStore, log_cb):
                     return self._send_json({"error": "not found"}, 404)
                 from dataclasses import asdict
                 return self._send_json(asdict(rec))
+            if path == "/notes":
+                # 返回全部设备备注 {device_id: note}
+                return self._send_json(store.get_all_notes())
             return self._send_json({"error": "not found", "path": path}, 404)
 
         def do_DELETE(self):
@@ -147,8 +165,6 @@ def _make_handler(store: LocationStore, log_cb):
 
         def do_POST(self):
             path = self.path.split("?", 1)[0]
-            if path != "/location":
-                return self._send_json({"error": "not found"}, 404)
 
             payload = None
             ctype = self.headers.get("Content-Type", "")
@@ -186,6 +202,19 @@ def _make_handler(store: LocationStore, log_cb):
             if not payload:
                 return self._send_json({"error": "empty body"}, 400)
 
+            # POST /notes: 设置设备备注, JSON {device_id, note}
+            if path == "/notes":
+                did = str(payload.get("device_id") or payload.get("id") or "").strip()
+                if not did:
+                    return self._send_json({"error": "device_id missing"}, 400)
+                note = str(payload.get("note") or payload.get("remark") or payload.get("value") or "")
+                store.set_note(did, note)
+                log_cb("[HTTP] 设置备注: %s -> %s" % (did, note or "(清除)"))
+                return self._send_json({"ok": True, "device_id": did, "note": store.get_note(did)})
+
+            if path != "/location":
+                return self._send_json({"error": "not found"}, 404)
+
             device_id = str(payload.get("device_id") or payload.get("id") or "").strip()
             try:
                 lat = float(payload.get("latitude") or payload.get("lat"))
@@ -206,6 +235,9 @@ def _make_handler(store: LocationStore, log_cb):
                 ts = float(ts) if ts else time.time()
             except Exception:
                 ts = time.time()
+            # 安卓客户端可能以毫秒为单位上报时间戳，统一转换为秒
+            if ts > 1e12:
+                ts = ts / 1000.0
             t_str = str(payload.get("time") or payload.get("time_str") or time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)))
 
             rec = LocationRecord(
