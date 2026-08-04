@@ -113,15 +113,16 @@ public class MainActivity extends AppCompatActivity {
 
     private void startServer() {
         if (serverRunning) return;
-        Intent intent = new Intent(this, ServerService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent);
-        } else {
+        try {
+            Intent intent = new Intent(this, ServerService.class);
             startService(intent);
+            serverRunning = true;
+            updateServerUI();
+            refreshServerAddress();
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(this, "服务启动失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
-        serverRunning = true;
-        updateServerUI();
-        refreshServerAddress();
     }
 
     private void bindViews() {

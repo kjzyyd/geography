@@ -39,7 +39,6 @@ public class ServerService extends Service {
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
-        startForegroundCompat();
     }
 
     @Override
