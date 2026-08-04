@@ -94,11 +94,9 @@ public class ServerService extends Service {
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
-        } else {
-            startForeground(NOTIFICATION_ID, n);
-        }
+        // 不指定 foregroundServiceType,避免 Android 14 需要额外声明
+        // FOREGROUND_SERVICE_DATA_SYNC 权限导致 SecurityException 闪退
+        startForeground(NOTIFICATION_ID, n);
     }
 
     /** 获取本机局域网 IPv4 地址 */
