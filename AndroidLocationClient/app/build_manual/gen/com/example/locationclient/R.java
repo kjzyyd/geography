@@ -288,7 +288,6 @@ public final class R {
     public static final int TextAppearance_Compat_Notification_Title=0x7f090004;
     /**
      * 完全透明主题,Activity 不显示任何界面
-     * 完全透明主题,Activity 不显示任何界面
      */
     public static final int TranslucentTheme=0x7f090005;
     public static final int Widget_Compat_NotificationActionContainer=0x7f090006;
