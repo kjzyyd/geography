@@ -125,7 +125,33 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupMap() {
-        mapView.setTileSource(TileSourceFactory.MAPNIK);
+        // 优先使用国内可高速访问的瓦片源(高德地图),避免 OpenStreetMap 国内加载慢/失败
+        try {
+            org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase gaode =
+                    new org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase(
+                            "Gaode",
+                            0, 19, 256, "",
+                            new String[]{
+                                    "https://webst01.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}",
+                                    "https://webst02.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}",
+                                    "https://webst03.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}",
+                                    "https://webst04.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}"
+                            }) {
+                        @Override
+                        public String getTileURLString(long pMapTileIndex) {
+                            int x = org.osmdroid.util.MapTileIndex.getX(pMapTileIndex);
+                            int y = org.osmdroid.util.MapTileIndex.getY(pMapTileIndex);
+                            int z = org.osmdroid.util.MapTileIndex.getZoom(pMapTileIndex);
+                            return getBaseUrl()
+                                    .replace("{x}", String.valueOf(x))
+                                    .replace("{y}", String.valueOf(y))
+                                    .replace("{z}", String.valueOf(z));
+                        }
+                    };
+            mapView.setTileSource(gaode);
+        } catch (Throwable ignore) {
+            mapView.setTileSource(TileSourceFactory.MAPNIK);
+        }
         mapView.setBuiltInZoomControls(true);
         mapView.setMultiTouchControls(true);
         mapView.setUseDataConnection(true);
