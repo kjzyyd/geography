@@ -229,6 +229,10 @@ def _make_handler(store: LocationStore, log_cb):
                 acc = float(payload.get("accuracy") or 0)
             except Exception:
                 acc = 0.0
+            try:
+                speed = float(payload.get("speed") or 0)
+            except Exception:
+                speed = 0.0
             provider = str(payload.get("provider") or payload.get("src") or "")
             ts = payload.get("timestamp") or payload.get("ts")
             try:
@@ -245,6 +249,7 @@ def _make_handler(store: LocationStore, log_cb):
                 latitude=lat,
                 longitude=lng,
                 accuracy=acc,
+                speed=speed,
                 provider=provider,
                 timestamp=ts,
                 time_str=t_str,

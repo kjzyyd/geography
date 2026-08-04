@@ -58,7 +58,15 @@ public class LocationService extends Service {
         super.onCreate();
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         createNotificationChannel();
-        startForeground(NOTIFICATION_ID, buildNotification());
+        Notification n = buildNotification();
+        if (Build.VERSION.SDK_INT >= 34) {
+            // Android 14+ 需要显式传入前台服务类型
+            try { startForeground(NOTIFICATION_ID, n, 0x10); } catch (Throwable t) {
+                try { startForeground(NOTIFICATION_ID, n); } catch (Throwable t2) {}
+            }
+        } else {
+            startForeground(NOTIFICATION_ID, n);
+        }
     }
 
     @Override
