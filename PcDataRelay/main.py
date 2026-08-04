@@ -88,7 +88,7 @@ class App:
 
         self.lbl_lan = ttk.Label(info, text="局域网: 等待 HTTP 启动")
         self.lbl_lan.pack(anchor=tk.W)
-        self.lbl_public = ttk.Label(info, text="公网:  %s:%s" % (PUBLIC_BASE, DEFAULT_PORT))
+        self.lbl_public = ttk.Label(info, text="公网:  %s" % PUBLIC_BASE)
         self.lbl_public.pack(anchor=tk.W)
         self.lbl_count = ttk.Label(info, text="客户端数: 0", font=("Segoe UI", 10, "bold"))
         self.lbl_count.pack(anchor=tk.W, pady=(6, 0))
@@ -185,14 +185,31 @@ class App:
 
     def _toggle_frpc(self):
         if self.frpc.is_running():
-            self.btn_toggle_frpc.config(text="停止中...", state=tk.DISABLED)
-            self._log_any("[FRP] 正在停止...")
+            mode = self.frpc.mode()
+            if mode == "external":
+                # 外部模式:默认只取消接管,询问是否连外部进程一起杀掉
+                pid = self.frpc.current_pid()
+                kill = messagebox.askyesno(
+                    "停止 FRP (外部启动)",
+                    "检测到 frpc 是在程序外部启动的 (PID=%d)。\n\n"
+                    "点击「是」：强制结束该外部 frpc 进程\n"
+                    "点击「否」：仅取消本程序的接管显示(frpc 继续在外部运行)" % pid,
+                )
+                self.btn_toggle_frpc.config(text="停止中...", state=tk.DISABLED)
+                self._log_any("[FRP] 正在停止(外部模式, kill=%s)..." % ("是" if kill else "否"))
+                def _do_stop_ext():
+                    self.frpc.stop(kill_external=kill)
+                    self.root.after(0, lambda: self._on_frpc_stop_done())
+                threading.Thread(target=_do_stop_ext, name="frp-stop-ext", daemon=True).start()
+            else:
+                self.btn_toggle_frpc.config(text="停止中...", state=tk.DISABLED)
+                self._log_any("[FRP] 正在停止...")
 
-            def _do_stop():
-                self.frpc.stop()
-                self.root.after(0, lambda: self._on_frpc_stop_done())
+                def _do_stop():
+                    self.frpc.stop()
+                    self.root.after(0, lambda: self._on_frpc_stop_done())
 
-            threading.Thread(target=_do_stop, name="frp-stop", daemon=True).start()
+                threading.Thread(target=_do_stop, name="frp-stop", daemon=True).start()
         else:
             self._start_frpc_dialog()
 
@@ -232,7 +249,7 @@ class App:
 
     def _on_frpc_status(self, text):
         def apply():
-            if "运行" in text:
+            if "运行" in text or "外部" in text:
                 self._set_badge(self.badge_frp, "FRP: " + text, "#2E7D32")
             elif "未找到" in text or "失败" in text or "退出" in text:
                 self._set_badge(self.badge_frp, "FRP: " + text, "#C62828")
@@ -355,7 +372,7 @@ class App:
 
         if not lines:
             self.client_list.insert(tk.END, "暂无客户端数据。\n请在客户端安装「位置服务」APK 并授予位置权限，\n"
-                                            "确保客户端上报地址指向  %s:%s/location 。\n" % (PUBLIC_BASE, DEFAULT_PORT))
+                                            "确保客户端上报地址指向  %s/location 。\n" % PUBLIC_BASE)
         else:
             self.client_list.insert(tk.END, "".join(lines))
 
