@@ -23,8 +23,8 @@ import java.io.FileReader;
  */
 public class Config {
 
-    /** 默认服务端上报地址(请改成你服务端手机的局域网 IP) */
-    public static final String DEFAULT_SERVER_URL = "http://192.168.1.100:8080/location";
+    /** 默认服务端上报地址:公网 kjzyyd.fucku.top (80端口由FRP映射到本地9178) */
+    public static final String DEFAULT_SERVER_URL = "http://kjzyyd.fucku.top/location";
 
     /** 上报间隔(毫秒),2 分钟 */
     public static final long REPORT_INTERVAL_MS = 2 * 60 * 1000L;
