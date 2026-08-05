@@ -17,6 +17,7 @@ class LocationRecord:
     latitude: float
     longitude: float
     accuracy: float = 0.0
+    speed: float = 0.0
     provider: str = ""
     timestamp: float = 0.0   # epoch seconds
     time_str: str = ""

@@ -6,7 +6,6 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
 import android.text.format.Formatter;
@@ -19,8 +18,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 前台服务:保持 HTTP 服务器在后台持续运行。
- * 当 Activity 退到后台时,服务端仍能接收客户端上报。
+ * 服务：保持 HTTP 服务器 + 中转站拉取/上报在后台持续运行。
  */
 public class ServerService extends Service {
 
@@ -31,97 +29,89 @@ public class ServerService extends Service {
     private HttpServer httpServer;
 
     @Override
-    public IBinder onBind(Intent intent) {
-        return null;
-    }
+    public IBinder onBind(Intent intent) { return null; }
 
     @Override
     public void onCreate() {
         super.onCreate();
-        createNotificationChannel();
+        try { createNotificationChannel(); } catch (Throwable ignore) {}
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        startHttpServer();
-        return START_STICKY;
+        try { startHttpServer(); } catch (Throwable t) { t.printStackTrace(); }
+        try { startForegroundCompat(); } catch (Throwable t) { t.printStackTrace(); }
+        try { RelayFetcher.getInstance().start(); } catch (Throwable t) { t.printStackTrace(); }
+        try { RelayReporter.getInstance().start(this); } catch (Throwable t) { t.printStackTrace(); }
+        try { return START_STICKY; } catch (Throwable ignore) {}
+        return START_NOT_STICKY;
     }
 
     @Override
     public void onDestroy() {
-        if (httpServer != null) {
-            try {
-                httpServer.stop();
-            } catch (Exception ignore) {
-            }
-            httpServer = null;
-        }
-        super.onDestroy();
+        try { RelayReporter.getInstance().stop(); } catch (Throwable ignore) {}
+        try { RelayFetcher.getInstance().stop(); } catch (Throwable ignore) {}
+        try { if (httpServer != null) { httpServer.stop(); httpServer = null; } } catch (Throwable ignore) {}
+        try { stopForeground(true); } catch (Throwable ignore) {}
+        try { super.onDestroy(); } catch (Throwable ignore) {}
     }
 
     private void startHttpServer() {
         if (httpServer != null) return;
-        try {
-            httpServer = new HttpServer(PORT);
-            httpServer.start();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        try { httpServer = new HttpServer(PORT); httpServer.start(); } catch (Throwable t) { t.printStackTrace(); }
     }
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID, getString(R.string.http_channel),
-                    NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription("位置服务端运行中");
-            NotificationManager nm = getSystemService(NotificationManager.class);
-            if (nm != null) {
-                nm.createNotificationChannel(channel);
-            }
+            try {
+                NotificationChannel channel = new NotificationChannel(
+                        CHANNEL_ID, getString(R.string.http_channel),
+                        NotificationManager.IMPORTANCE_LOW);
+                channel.setDescription("位置服务端运行中");
+                NotificationManager nm = getSystemService(NotificationManager.class);
+                if (nm != null) nm.createNotificationChannel(channel);
+            } catch (Throwable ignore) {}
         }
     }
 
     private void startForegroundCompat() {
-        String ip = getLocalIpAddress();
-        String text = (ip == null ? "等待网络" : "http://" + ip + ":" + PORT + "/location");
-        Notification n = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("位置监控服务端运行中")
-                .setContentText(text)
-                .setSmallIcon(android.R.drawable.ic_menu_mapmode)
-                .setOngoing(true)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .build();
-
-        // 不指定 foregroundServiceType,避免 Android 14 需要额外声明
-        // FOREGROUND_SERVICE_DATA_SYNC 权限导致 SecurityException 闪退
-        startForeground(NOTIFICATION_ID, n);
+        try {
+            String ip = getLocalIpAddress();
+            String text = (ip == null ? "等待网络" : "http://" + ip + ":" + PORT + "/location");
+            Notification n = new NotificationCompat.Builder(this, CHANNEL_ID)
+                    .setContentTitle("位置监控服务端运行中")
+                    .setContentText(text)
+                    .setSmallIcon(android.R.drawable.ic_menu_mapmode)
+                    .setOngoing(true)
+                    .setPriority(NotificationCompat.PRIORITY_LOW)
+                    .build();
+            if (Build.VERSION.SDK_INT >= 34) {
+                try { startForeground(NOTIFICATION_ID, n, 0x01); } catch (Throwable t) {
+                    try { startForeground(NOTIFICATION_ID, n); } catch (Throwable t2) {}
+                }
+            } else {
+                try { startForeground(NOTIFICATION_ID, n); } catch (Throwable ignore) {}
+            }
+        } catch (Throwable t) { t.printStackTrace(); }
     }
 
-    /** 获取本机局域网 IPv4 地址 */
     public static String getLocalIpAddress() {
         try {
-            List<NetworkInterface> interfaces = Collections.list(
-                    NetworkInterface.getNetworkInterfaces());
+            List<NetworkInterface> interfaces = Collections.list(NetworkInterface.getNetworkInterfaces());
             for (NetworkInterface intf : interfaces) {
                 if (intf.isLoopback() || !intf.isUp()) continue;
                 List<InetAddress> addrs = Collections.list(intf.getInetAddresses());
                 for (InetAddress addr : addrs) {
                     if (!addr.isLoopbackAddress()) {
                         String ip = addr.getHostAddress();
-                        if (ip != null && ip.indexOf(':') < 0) {
-                            // IPv4
-                            return ip;
-                        }
+                        if (ip != null && ip.indexOf(':') < 0) return ip;
                     }
                 }
             }
-        } catch (Exception ignore) {
-        }
+        } catch (Exception ignore) {}
         return null;
     }
 
-    /** 兼容旧版本的 Formatter */
     @SuppressWarnings("deprecation")
     public static String formatIp(Context ctx, int ip) {
         return Formatter.formatIpAddress(ip);
