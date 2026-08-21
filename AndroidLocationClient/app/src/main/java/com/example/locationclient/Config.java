@@ -28,11 +28,23 @@ public class Config {
     /** 备用地址:如果80端口不通,尝试9178端口 */
     public static final String FALLBACK_SERVER_URL = "http://kjzyyd.fucku.top:9178/location";
 
-    /** 上报间隔(毫秒),30 秒 */
-    public static final long REPORT_INTERVAL_MS = 30 * 1000L;
+    /** 静止模式上报间隔(毫秒):2 分钟。手机静止时用单次定位,不占用 GPS,系统可正常休眠。 */
+    public static final long IDLE_REPORT_INTERVAL_MS = 2 * 60 * 1000L;
+
+    /** 移动模式上报间隔(毫秒):5 秒。检测到移动后才连续定位。 */
+    public static final long MOVING_REPORT_INTERVAL_MS = 5 * 1000L;
+
+    /** 位移超过此距离(米)即立即上报 */
+    public static final float MOVEMENT_THRESHOLD_METERS = 20.0f;
+
+    /** 加速度(m/s²)超过该值判定为「移动」。用加速度判断极省电,不会阻止系统休眠。 */
+    public static final float MOTION_DETECT_THRESHOLD = 1.2f;
+
+    /** 停止移动后,再等待这么久才切回静止省电模式(毫秒) */
+    public static final long IDLE_GRACE_MS = 60 * 1000L;
 
     /** 单次定位超时(毫秒) */
-    public static final long LOCATION_TIMEOUT_MS = 30 * 1000L;
+    public static final long LOCATION_TIMEOUT_MS = 20 * 1000L;
 
     /** 设备 ID(可在配置文件中覆盖) */
     public static final String DEFAULT_DEVICE_ID = "client_001";
