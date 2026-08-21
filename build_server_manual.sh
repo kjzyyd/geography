@@ -23,7 +23,9 @@ echo "=== 3. 链接资源 (aapt2 link) ==="
 cat > $BUILD/AndroidManifest_pkg.xml << 'XMLEOF'
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.locationserver">
+    package="com.example.locationserver"
+    android:versionCode="13"
+    android:versionName="1.3.0">
 XMLEOF
 tail -n +3 $PROJECT/app/src/main/AndroidManifest.xml >> $BUILD/AndroidManifest_pkg.xml
 

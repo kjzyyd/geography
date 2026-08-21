@@ -10,11 +10,12 @@ import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.content.Context;
-import androidx.core.content.ContextCompat;
 
 /**
  * 透明入口 Activity:不设置任何内容视图,启动后立刻请求必要权限并启动后台服务,
  * 然后立即 finish(),用户看不到任何界面。
+ *
+ * 纯系统 API 实现,零第三方依赖(轻量化)。
  *
  * 注意:Android 系统要求位置权限必须由用户首次手动授予,无法静默获取。
  * 因此第一次安装后点击图标会弹出系统权限对话框(系统行为,非本应用主动弹窗),
@@ -41,13 +42,14 @@ public class MainActivity extends Activity {
     }
 
     private boolean hasCorePermissions() {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true;
+        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
     }
 
     private boolean hasBackgroundLocation() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true;
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        return checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
     }
 

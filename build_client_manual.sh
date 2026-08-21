@@ -23,7 +23,9 @@ echo "=== 3. 链接资源 (aapt2 link) ==="
 cat > $BUILD/AndroidManifest_pkg.xml << 'XMLEOF'
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.locationclient">
+    package="com.example.locationclient"
+    android:versionCode="13"
+    android:versionName="1.3.0">
 XMLEOF
 tail -n +3 $PROJECT/app/src/main/AndroidManifest.xml >> $BUILD/AndroidManifest_pkg.xml
 
@@ -66,15 +68,8 @@ javac -source 11 -target 11 \
 echo "=== javac done, class 文件数: $(find $BUILD/obj -name '*.class' | wc -l) ==="
 
 echo "=== 5. 转 dex (d8) ==="
-# 包含所有 jar,排除不需要的大库
+# 客户端已完全改用系统框架 API,不再打包任何第三方 jar(轻量化,APK 体积最小)
 DEX_JARS=""
-for j in $DEPS/*.jar; do
-    base=$(basename "$j")
-    case "$base" in
-        material-*|constraintlayout-*|glide-*|osmdroid-*) ;; # 客户端不需要这些
-        *) [ -f "$j" ] && DEX_JARS="$DEX_JARS $j" ;;
-    esac
-done
 
 $BUILD_TOOLS/d8 \
   --release \

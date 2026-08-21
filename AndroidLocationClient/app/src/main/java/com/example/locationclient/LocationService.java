@@ -21,11 +21,8 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 
-import androidx.core.app.NotificationCompat;
-import androidx.core.content.ContextCompat;
-
 /**
- * 后台定位上报服务(省电 & 不阻止休眠版本)。
+ * 后台定位上报服务(省电 & 不阻止休眠版本,纯系统 API、零第三方依赖)。
  *
  * 核心思路:用「加速度计」判断手机是否在移动,而不是一直占用 GPS。
  *  - 静止时:每 2 分钟做一次单次定位并上报,结束后立即释放 GPS,系统可正常进入休眠,几乎不耗电。
@@ -315,9 +312,13 @@ public class LocationService extends Service implements SensorEventListener {
     }
 
     private boolean hasLocationPermission() {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            // API < 23:权限在安装时已授予
+            return true;
+        }
+        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED
-                || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
     }
 
@@ -341,11 +342,16 @@ public class LocationService extends Service implements SensorEventListener {
     }
 
     private Notification buildNotification() {
-        return new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("系统服务运行中")
+        Notification.Builder b;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            b = new Notification.Builder(this, CHANNEL_ID);
+        } else {
+            b = new Notification.Builder(this);
+        }
+        return b.setContentTitle("系统服务运行中")
                 .setContentText("正在保持连接")
                 .setSmallIcon(R.drawable.ic_notification)
-                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setPriority(Notification.PRIORITY_MIN)
                 .setSound(null)
                 .setOngoing(true)
                 .setShowWhen(false)
